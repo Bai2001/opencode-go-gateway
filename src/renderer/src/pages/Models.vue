@@ -37,10 +37,7 @@
                 </el-table-column>
                 <el-table-column label="启用" width="100">
                     <template #default="{ row }">
-                        <el-switch
-                            v-model="row.enabled"
-                            @change="(v: boolean) => onToggle(row, v)"
-                        />
+                        <el-switch v-model="row.enabled" @change="v => onToggle(row, v)" />
                     </template>
                 </el-table-column>
                 <el-table-column label="操作" width="120" fixed="right">
@@ -137,7 +134,7 @@
         }
     }
 
-    async function onDelete(row: ModelItem) {
+    async function onDelete(row: any) {
         try {
             await api.models.remove(row.id)
             ElMessage.success('已删除')
@@ -147,9 +144,9 @@
         }
     }
 
-    async function onToggle(row: ModelItem, v: boolean) {
+    async function onToggle(row: any, v: string | number | boolean) {
         try {
-            await api.models.setEnabled(row.id, v)
+            await api.models.setEnabled(row.id, Boolean(v))
         } catch (e: any) {
             ElMessage.error(e?.message ?? '操作失败')
             await refresh()
