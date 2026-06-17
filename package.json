@@ -1,0 +1,72 @@
+{
+    "name": "opencode-go-openai-gateway",
+    "version": "0.1.0",
+    "description": "本地 OpenAI 兼容 API 网关，统一管理多个 OpenCode Go Key",
+    "main": "out/main/index.js",
+    "author": "opencode-go-gateway",
+    "license": "MIT",
+    "private": true,
+    "scripts": {
+        "dev": "electron-vite dev",
+        "build": "electron-vite build",
+        "start": "electron-vite preview",
+        "package:win": "electron-vite build && electron-builder --win nsis",
+        "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+        "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+        "typecheck": "npm run typecheck:node && npm run typecheck:web"
+    },
+    "dependencies": {
+        "electron-store": "^8.2.0",
+        "fastify": "^4.28.1"
+    },
+    "devDependencies": {
+        "@types/node": "^20.14.10",
+        "@vitejs/plugin-vue": "^5.0.5",
+        "@vue/tsconfig": "^0.5.1",
+        "electron": "^31.2.1",
+        "electron-builder": "^24.13.3",
+        "electron-vite": "^2.3.0",
+        "element-plus": "^2.7.6",
+        "pinia": "^2.1.7",
+        "prettier": "^3.8.4",
+        "typescript": "^5.5.3",
+        "vite": "^5.3.3",
+        "vue": "^3.4.31",
+        "vue-json-viewer": "^3.0.4",
+        "vue-router": "^4.4.0"
+    },
+    "build": {
+        "appId": "com.opencode.go.gateway",
+        "productName": "OpenCode Go Gateway",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "out/**/*",
+            "build/**/*",
+            "package.json"
+        ],
+        "asarUnpack": [
+            "build/**/*"
+        ],
+        "icon": "build/icon.png",
+        "win": {
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ]
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    },
+    "allowScripts": {
+        "electron@31.7.7": true
+    },
+    "packageManager": "npm@11.17.0"
+}

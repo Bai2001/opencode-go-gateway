@@ -1,0 +1,34 @@
+# 依赖目录
+node_modules/
+
+# 构建产物
+out/
+release/
+dist/
+.vite/
+.cache/
+
+# Electron Vite 根据 electron.vite.config.ts 生成的产物
+electron.vite.config.js
+electron.vite.config.d.ts
+
+# TypeScript 增量构建信息
+tsconfig.node.tsbuildinfo
+tsconfig.web.tsbuildinfo
+*.tsbuildinfo
+
+# 编辑器与系统文件
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+# 本地环境变量
+.env
+.env.local
+.env.*.local
+
+# 项目工具
+.codegraph/
