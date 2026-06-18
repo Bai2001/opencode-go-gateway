@@ -23,7 +23,12 @@ import type {
 export type StoreShape = {
     settings: AppSettings
     keys: ApiKeyRecord[]
-    usage: UsageRecord[]
+    /**
+     * 已废弃：usage 数据已迁移到 SQLite（usage.db）。
+     * 此字段仅在启动迁移时用于读取旧版 config.json 中残留的记录，
+     * 迁移完成后会被清空。新代码请使用 usageStore。
+     */
+    usage?: UsageRecord[]
     clientTokens: ClientToken[]
     /** 持久化的当前 Gateway Token（明文），仅用于进程重启后不需要用户重设 */
     gatewayTokenPlain?: string
@@ -95,6 +100,20 @@ export class JsonStore {
         return await this.load()
     }
 
+    /**
+     * 取出并清空 config.json 中残留的 usage 数组。
+     * 用于从 JSON 迁移到 SQLite 的一次性操作：返回旧记录后从磁盘删除该字段。
+     */
+    async consumeUsage(): Promise<UsageRecord[]> {
+        const s = await this.load()
+        const legacy = Array.isArray(s.usage) ? s.usage : []
+        if (legacy.length === 0) return []
+        await this.update(cur => {
+            delete cur.usage
+        })
+        return legacy
+    }
+
     /** 原子地更新 store：callback 收到 mutable 引用，return 后自动 flush */
     async update(mutator: (s: StoreShape) => void | Promise<void>): Promise<StoreShape> {
         const s = await this.load()
@@ -144,7 +163,8 @@ export class JsonStore {
                 },
             },
             keys: s.keys ?? [],
-            usage: s.usage ?? [],
+            // 不再默认初始化为 []；保留 raw 中的值供启动迁移读取
+            usage: Array.isArray(s.usage) ? s.usage : undefined,
             clientTokens: s.clientTokens ?? [],
             gatewayTokenPlain: s.gatewayTokenPlain,
         }

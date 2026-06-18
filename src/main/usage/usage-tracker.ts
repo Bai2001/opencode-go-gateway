@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { UsageRecord, UsageSummary, UsageWindow } from '../../shared/types'
 import { store } from '../store/json-store'
+import { usageStore, WINDOW_MS } from '../store/usage-store'
 import { estimateCost, roughTokensFromText, type ModelRates } from './cost-estimator'
 
 /**
@@ -14,15 +15,11 @@ import { estimateCost, roughTokensFromText, type ModelRates } from './cost-estim
  *   2. 流式时累加的 text delta
  *   3. 实在拿不到就 char 粗估
  *
+ * 存储介质：SQLite（usage.db）。详见 usage-store.ts。
+ *
  * 日志裁剪：
  *   每次 record 后异步裁剪超过 retentionDays 的记录。
  */
-
-const WINDOW_MS: Record<UsageWindow, number> = {
-    '5h': 5 * 60 * 60 * 1000,
-    '7d': 7 * 24 * 60 * 60 * 1000,
-    '30d': 30 * 24 * 60 * 60 * 1000,
-}
 
 class UsageTracker {
     /** 创建并落盘一条 usage 记录。返回 record id。 */
@@ -35,9 +32,7 @@ class UsageTracker {
             createdAt: input.createdAt ?? Date.now(),
             ...input,
         }
-        await store.update(s => {
-            s.usage.push(rec)
-        })
+        usageStore.insert(rec)
         // 异步裁剪，不要阻塞请求
         setImmediate(() => {
             this.prune().catch(() => {
@@ -49,85 +44,19 @@ class UsageTracker {
 
     /** 更新一条已有 usage 记录（流式结束后补 usage） */
     async patch(id: string, patch: Partial<UsageRecord>): Promise<void> {
-        await store.update(s => {
-            const r = s.usage.find(x => x.id === id)
-            if (r) Object.assign(r, patch)
-        })
+        usageStore.patch(id, patch)
     }
 
     async list(
         opts: { limit?: number; model?: string; keyId?: string } = {}
     ): Promise<UsageRecord[]> {
-        const s = await store.read()
-        let arr = s.usage
-        if (opts.model) arr = arr.filter(r => r.model === opts.model)
-        if (opts.keyId) arr = arr.filter(r => r.keyId === opts.keyId)
-        arr = arr.slice().sort((a, b) => b.createdAt - a.createdAt)
-        if (opts.limit) arr = arr.slice(0, opts.limit)
-        return arr
+        return usageStore.list(opts)
     }
 
     async summary(window: UsageWindow): Promise<UsageSummary> {
         const since = Date.now() - WINDOW_MS[window]
         const s = await store.read()
-        const records = s.usage.filter(r => r.createdAt >= since)
-        const byKeyMap = new Map<
-            string,
-            { keyId: string; keyPreview: string; requests: number; estimatedCost: number }
-        >()
-        const byModelMap = new Map<
-            string,
-            { model: string; requests: number; estimatedCost: number }
-        >()
-
-        let totalInput = 0
-        let totalOutput = 0
-        let totalCached = 0
-        let totalCost = 0
-        let success = 0
-        let failed = 0
-
-        for (const r of records) {
-            if (r.status === 'success') success++
-            else if (r.status === 'failed') failed++
-            totalInput += r.inputTokens ?? 0
-            totalOutput += r.outputTokens ?? 0
-            totalCached += r.cachedTokens ?? 0
-            totalCost += r.estimatedCost ?? 0
-
-            const k = byKeyMap.get(r.keyId) ?? {
-                keyId: r.keyId,
-                keyPreview: r.keyId ? previewFor(s.keys, r.keyId) : '?',
-                requests: 0,
-                estimatedCost: 0,
-            }
-            k.requests += 1
-            k.estimatedCost += r.estimatedCost ?? 0
-            byKeyMap.set(r.keyId, k)
-
-            const m = byModelMap.get(r.model) ?? { model: r.model, requests: 0, estimatedCost: 0 }
-            m.requests += 1
-            m.estimatedCost += r.estimatedCost ?? 0
-            byModelMap.set(r.model, m)
-        }
-
-        return {
-            totalRequests: records.length,
-            successRequests: success,
-            failedRequests: failed,
-            totalInputTokens: totalInput,
-            totalOutputTokens: totalOutput,
-            totalCachedTokens: totalCached,
-            estimatedCost: round(totalCost),
-            byKey: Array.from(byKeyMap.values()).map(k => ({
-                ...k,
-                estimatedCost: round(k.estimatedCost),
-            })),
-            byModel: Array.from(byModelMap.values()).map(m => ({
-                ...m,
-                estimatedCost: round(m.estimatedCost),
-            })),
-        }
+        return usageStore.aggregateSince(since, s.keys)
     }
 
     /** 裁剪超过 retentionDays 的记录 */
@@ -136,14 +65,7 @@ class UsageTracker {
         const days = s.settings.log?.retentionDays ?? 30
         if (days <= 0) return
         const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
-        const before = s.usage.length
-        s.usage = s.usage.filter(r => r.createdAt >= cutoff)
-        if (s.usage.length !== before) {
-            // store.update 的语义是 mutate 后 flush
-            await store.update(cur => {
-                cur.usage = s.usage
-            })
-        }
+        usageStore.pruneBefore(cutoff)
     }
 
     /** 把上游 usage 字段折算成本估算 */
@@ -195,15 +117,6 @@ class UsageTracker {
     roughTokens(text?: string | null) {
         return roughTokensFromText(text)
     }
-}
-
-function previewFor(keys: Array<{ id: string; keyPreview: string }>, id: string): string {
-    const k = keys.find(x => x.id === id)
-    return k?.keyPreview ?? '(已删除)'
-}
-
-function round(n: number): number {
-    return Math.round(n * 1_000_000) / 1_000_000
 }
 
 export const usageTracker = new UsageTracker()

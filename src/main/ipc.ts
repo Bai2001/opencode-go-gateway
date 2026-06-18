@@ -8,6 +8,7 @@ import { modelRouter } from './gateway/model-router'
 import { syncModelsFromDocs, type ModelPriceInfo } from './gateway/docs-sync'
 import { MODEL_REGISTRY } from '../shared/models'
 import { store } from './store/json-store'
+import { usageStore } from './store/usage-store'
 import { TokenService } from './security/token-service'
 import { refreshTrayMenu } from './tray'
 import {
@@ -523,8 +524,7 @@ export function registerIpc() {
 
     ipcMain.handle('usage:detail', async (_e, payload: { id: string }) => {
         if (!payload?.id) return fail('缺少 id', 'bad_request')
-        const s = await store.read()
-        const rec = s.usage.find(r => r.id === payload.id)
+        const rec = usageStore.getById(payload.id)
         if (!rec) return fail('记录不存在', 'not_found')
         return ok(rec)
     })
