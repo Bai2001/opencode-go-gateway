@@ -1,4 +1,3 @@
-import { MODEL_REGISTRY } from '../../shared/models'
 import { store } from '../store/json-store'
 import type { ModelRoute, ModelRegistry } from '../../shared/types'
 
@@ -12,9 +11,11 @@ import type { ModelRoute, ModelRegistry } from '../../shared/types'
  *
  * 因此本类只关心：模型是否支持，对应 upstream URL 是多少。
  * V2 支持从 Store 加载自定义模型与启停配置。
+ *
+ * 内置模型列表完全由 store.builtInOverrides 决定（启动时从官网同步），
+ * 本类不再依赖任何硬编码的 MODEL_REGISTRY。
  */
 class ModelRouter {
-    private builtIn: ModelRegistry = MODEL_REGISTRY
     private registry: ModelRegistry = {}
     private disabled = new Set<string>()
 
@@ -25,22 +26,14 @@ class ModelRouter {
             custom: {},
             disabled: [],
         }
-        const merged: ModelRegistry = Object.fromEntries(
-            Object.entries(this.builtIn).map(([id, route]) => {
-                const override = s.builtInOverrides?.[id]
-                return [
-                    id,
-                    {
-                        ...route,
-                        upstreamUrl: override?.upstreamUrl || route.upstreamUrl,
-                        enabled: override?.enabled ?? route.enabled,
-                        inputPrice: override?.inputPrice ?? route.inputPrice,
-                        outputPrice: override?.outputPrice ?? route.outputPrice,
-                        cachedPrice: override?.cachedPrice ?? route.cachedPrice,
-                    },
-                ]
-            })
-        )
+        const merged: ModelRegistry = {}
+        // 内置模型：全部来自 store.builtInOverrides（由官网同步写入）
+        for (const [id, override] of Object.entries(s.builtInOverrides ?? {})) {
+            if (id.trim() && override?.upstreamUrl) {
+                merged[id] = { ...override }
+            }
+        }
+        // 自定义模型
         for (const [id, route] of Object.entries(s.custom ?? {})) {
             if (id.trim()) merged[id] = route
         }
@@ -81,18 +74,17 @@ class ModelRouter {
             disabled: [],
         }
         const disabled = new Set(s.disabled ?? [])
-        const builtIn = Object.entries(this.builtIn).map(([id, route]) => {
-            const override = s.builtInOverrides?.[id]
-            return {
+        const builtIn = Object.entries(s.builtInOverrides ?? {})
+            .filter(([id, override]) => id.trim() && override?.upstreamUrl)
+            .map(([id, override]) => ({
                 id,
-                upstreamUrl: override?.upstreamUrl || route.upstreamUrl,
+                upstreamUrl: override!.upstreamUrl,
                 source: 'built-in' as const,
                 enabled: !disabled.has(id),
-                inputPrice: override?.inputPrice ?? route.inputPrice,
-                outputPrice: override?.outputPrice ?? route.outputPrice,
-                cachedPrice: override?.cachedPrice ?? route.cachedPrice,
-            }
-        })
+                inputPrice: override!.inputPrice,
+                outputPrice: override!.outputPrice,
+                cachedPrice: override!.cachedPrice,
+            }))
         const custom = Object.entries(s.custom ?? {}).map(([id, route]) => ({
             id,
             upstreamUrl: route.upstreamUrl,

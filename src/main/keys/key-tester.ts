@@ -1,4 +1,4 @@
-import { MODEL_REGISTRY } from '../../shared/models'
+import { DEFAULT_GO_UPSTREAM_URL } from '../../shared/models'
 import type { ApiKeyRecord } from '../../shared/types'
 import { cryptoService } from '../security/crypto-service'
 
@@ -25,8 +25,7 @@ export type KeyTestResult = {
 const TEST_MODEL = 'deepseek-v4-flash'
 
 export async function testKey(rec: ApiKeyRecord): Promise<KeyTestResult> {
-    const model = MODEL_REGISTRY[TEST_MODEL]
-    const url = model.upstreamUrl
+    const url = DEFAULT_GO_UPSTREAM_URL
     const key = cryptoService.decrypt(rec.keyCiphertext)
     const start = Date.now()
     try {

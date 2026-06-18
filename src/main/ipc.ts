@@ -5,8 +5,7 @@ import { testKey } from './keys/key-tester'
 import { usageTracker } from './usage/usage-tracker'
 import { gatewayServer } from './server'
 import { modelRouter } from './gateway/model-router'
-import { syncModelsFromDocs, type ModelPriceInfo } from './gateway/docs-sync'
-import { MODEL_REGISTRY } from '../shared/models'
+import { syncModelsToStore } from './gateway/docs-sync'
 import { store } from './store/json-store'
 import { usageStore } from './store/usage-store'
 import { TokenService } from './security/token-service'
@@ -204,27 +203,13 @@ export function registerIpc() {
     })
 
     ipcMain.handle('models:syncFromDocs', async () => {
-        const { models } = await syncModelsFromDocs()
-        if (models.length === 0) return fail('未从文档解析到模型', 'parse_error')
-
-        const synced: ModelPriceInfo[] = []
-        await store.update(s => {
-            for (const m of models) {
-                const builtIn = MODEL_REGISTRY[m.id]
-                if (!builtIn) continue
-                const existing = s.settings.models.builtInOverrides[m.id]
-                s.settings.models.builtInOverrides[m.id] = {
-                    upstreamUrl: builtIn.upstreamUrl,
-                    enabled: existing?.enabled ?? true,
-                    inputPrice: m.input,
-                    outputPrice: m.output,
-                    cachedPrice: m.cached,
-                }
-                synced.push(m)
-            }
-        })
-        modelRouter.reload()
-        return ok(synced)
+        try {
+            const synced = await syncModelsToStore()
+            if (synced.length === 0) return fail('未从文档解析到模型', 'parse_error')
+            return ok(synced)
+        } catch (e: any) {
+            return fail(e?.message ?? '同步失败', 'sync_error')
+        }
     })
 
     // ---- keys ----

@@ -145,7 +145,7 @@ export type ModelRoute = {
 export type ModelRegistry = Record<string, ModelRoute>
 
 export type ModelConfig = {
-    /** 从官网同步的内置模型覆盖表（用于更新 MODEL_REGISTRY） */
+    /** 从官网同步的内置模型表（启动时由 docs-sync 自动写入） */
     builtInOverrides: ModelRegistry
     /** 用户自定义模型 */
     custom: ModelRegistry

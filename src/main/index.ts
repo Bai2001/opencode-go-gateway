@@ -6,6 +6,7 @@ import { createMainWindow, showMainWindow } from './window'
 import { createTray, destroyTray, refreshTrayMenu } from './tray'
 import { registerIpc } from './ipc'
 import { modelRouter } from './gateway/model-router'
+import { syncModelsToStore } from './gateway/docs-sync'
 
 /**
  * Electron Main 进程入口。
@@ -42,6 +43,12 @@ if (!gotLock) {
             console.error('[migrate] usage 迁移失败：', e?.message ?? e)
         }
         modelRouter.reload()
+        // 启动时后台从官网同步模型列表与价格（不阻塞窗口创建，失败保留现有配置）
+        syncModelsToStore({ silent: true })
+            .then(n => {
+                if (n.length > 0) console.log(`[docs-sync] 启动同步完成，共 ${n.length} 个模型`)
+            })
+            .catch(e => console.error('[docs-sync] 启动同步异常：', e?.message ?? e))
 
         registerIpc()
         try {
